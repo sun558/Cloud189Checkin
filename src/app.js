@@ -46,12 +46,12 @@ const doTask = async (cloudClient) => {
   );
   await delay(5000); // 延迟5秒
 
-  const res2 = await cloudClient.taskSign();
-  buildTaskResult(res2, result);
+  //const res2 = await cloudClient.taskSign();
+  //buildTaskResult(res2, result);
 
-  await delay(5000); // 延迟5秒
-  const res3 = await cloudClient.taskPhoto();
-  buildTaskResult(res3, result);
+  //await delay(5000); // 延迟5秒
+  //const res3 = await cloudClient.taskPhoto();
+  //buildTaskResult(res3, result);
 
   return result;
 };
