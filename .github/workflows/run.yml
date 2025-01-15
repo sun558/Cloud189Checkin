@@ -2,7 +2,7 @@ name: Cloud check in action
 on:
   push:
     branches:
-      - haha458-patch-1
+      - main
       - dev
   watch:
     types: started
