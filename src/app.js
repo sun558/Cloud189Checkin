@@ -60,17 +60,22 @@ const doFamilyTask = async (cloudClient) => {
   const { familyInfoResp } = await cloudClient.getFamilyList();
   const result = [];
   if (familyInfoResp) {
-    for (let index = 0; index < familyInfoResp.length; index += 1) {
-      const { familyId } = familyInfoResp[index];
+      const { familyId } = familyInfoResp[0];
       const res = await cloudClient.familyUserSign(familyId);
-      result.push(
+	  
+	 
+      result.push({
+		  familySent:
         "家庭任务" +
           `${res.signStatus ? "已经签到过了，" : ""}签到获得${
             res.bonusSpace
-          }M空间`
-      );
+          }M空间`,
+		  familySpace: res.bonusSpace
+      
+	  }
+	  )
     }
-  }
+  
   return result;
 };
 
@@ -193,9 +198,12 @@ const push = (title, desp) => {
 
 // 开始执行程序
 async function main() {
+	const familySpace = [];
+	let sum = 0;
   for (let index = 0; index < accounts.length; index += 1) {
     const account = accounts[index];
     const { userName, password } = account;
+	
     if (userName && password) {
       const userNameInfo = mask(userName, 3, 7);
       try {
@@ -205,7 +213,13 @@ async function main() {
         const result = await doTask(cloudClient);
         result.forEach((r) => logger.log(r));
         const familyResult = await doFamilyTask(cloudClient);
-        familyResult.forEach((r) => logger.log(r));
+        familyResult.forEach((r) => {
+			logger.log(r.familySent);
+		
+			familySpace.push(r.familySpace);
+		}
+	);
+		
         
         const { cloudCapacityInfo, familyCapacityInfo } =
           await cloudClient.getUserSizeInfo();
@@ -228,10 +242,21 @@ async function main() {
           throw e;
         }
       } finally {
+		 
         logger.log(`  `);
       }
     }
+	      
   }
+         
+		  if(familySpace.length> 1 ){
+			  familySpace.forEach(function(value){
+				 sum += value;
+			  });
+		  logger.log('家庭云今日获得：');
+		  logger.log(familySpace.join(' + ') +' = ' +sum + "M");
+		  }
+		  logger.log(`  `);
 }
 
 (async () => {
