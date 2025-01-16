@@ -216,12 +216,12 @@ async function main() {
 		 let  { cloudCapacityInfo, familyCapacityInfo } = await cloudClient.getUserSizeInfo();
 		 
         logger.log(
-          `前：个人容量：${(
+          `前：个人：${(
             cloudCapacityInfo.totalSize /
             1024 /
             1024 /
             1024
-          ).toFixed(2)}G, 家庭容量：${(
+          ).toFixed(2)}G, 家庭：${(
             familyCapacityInfo.totalSize /
             1024 /
             1024 /
@@ -245,12 +245,12 @@ async function main() {
           await cloudClient.getUserSizeInfo();
 		  
         logger.log(
-          `后：个人容量：${(
+          `后：个人：${(
             cloudCapacityInfo.totalSize /
             1024 /
             1024 /
             1024
-          ).toFixed(2)}G, 家庭容量：${(
+          ).toFixed(2)}G, 家庭：${(
             familyCapacityInfo.totalSize /
             1024 /
             1024 /
