@@ -42,16 +42,16 @@ const doTask = async (cloudClient) => {
   const result = [];
   const res1 = await cloudClient.userSign();
   result.push(
-    `${res1.isSign ? "已经签到过了，" : ""}签到获得${res1.netdiskBonus}M空间`
+    '个人'+`${res1.isSign ? "已经签到过了，" : ""}签到获得${res1.netdiskBonus}M空间`
   );
     await delay(5000); // 延迟5秒
 
-//  const res2 = await cloudClient.taskSign();
-//  buildTaskResult(res2, result);
+//    const res2 = await cloudClient.taskSign();
+//    buildTaskResult(res2, result);
 
-//  await delay(5000); // 延迟5秒
-//  const res3 = await cloudClient.taskPhoto();
-//  buildTaskResult(res3, result);
+//    await delay(5000); // 延迟5秒
+//    const res3 = await cloudClient.taskPhoto();
+//    buildTaskResult(res3, result);
 
   return result;
 };
@@ -66,7 +66,7 @@ const doFamilyTask = async (cloudClient) => {
 	 
       result.push({
 		  familySent:
-        "家庭任务" +
+        "家庭" +
           `${res.signStatus ? "已经签到过了，" : ""}签到获得${
             res.bonusSpace
           }M空间`,
@@ -210,26 +210,45 @@ async function main() {
         logger.log(`${userNameInfo}开始执行`);
         const cloudClient = new CloudClient(userName, password);
         await cloudClient.login();
+		if(index == accounts.length - 1){
+		 let  { cloudCapacityInfo, familyCapacityInfo } = await cloudClient.getUserSizeInfo();
+		 
+        logger.log(
+          `前：个人容量：${(
+            cloudCapacityInfo.totalSize /
+            1024 /
+            1024 /
+            1024
+          ).toFixed(2)}G,家庭容量：${(
+            familyCapacityInfo.totalSize /
+            1024 /
+            1024 /
+            1024
+          ).toFixed(2)}G`
+        );
+		
+		}
         const result = await doTask(cloudClient);
         result.forEach((r) => logger.log(r));
         const familyResult = await doFamilyTask(cloudClient);
         familyResult.forEach((r) => {
 			logger.log(r.familySent);
-		
+		     
 			familySpace.push(r.familySpace);
 		}
 	);
 		
         
-        const { cloudCapacityInfo, familyCapacityInfo } =
+         let { cloudCapacityInfo, familyCapacityInfo } =
           await cloudClient.getUserSizeInfo();
+		  
         logger.log(
-          `个人总容量：${(
+          `后：个人容量：${(
             cloudCapacityInfo.totalSize /
             1024 /
             1024 /
             1024
-          ).toFixed(2)}G,家庭总容量：${(
+          ).toFixed(2)}G,家庭容量：${(
             familyCapacityInfo.totalSize /
             1024 /
             1024 /
@@ -242,21 +261,22 @@ async function main() {
           throw e;
         }
       } finally {
+         logger.log(`  `);
 		 
-        logger.log(`  `);
       }
     }
 	      
-  }
-         
+  } 
+           
 		  if(familySpace.length> 1 ){
 			  familySpace.forEach(function(value){
 				 sum += value;
 			  });
 		  logger.log('家庭云今日获得：');
-		  logger.log(familySpace.join(' + ') +' = ' +sum + "m");
+		  logger.log(familySpace.join(' + ') +' = ' +sum + "M");
 		  }
 		  logger.log(`  `);
+		  
 }
 
 (async () => {
