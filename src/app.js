@@ -207,7 +207,8 @@ async function main() {
     if (userName && password) {
       const userNameInfo = mask(userName, 3, 7);
       try {
-        logger.log(`${userNameInfo}开始执行`);
+		let ind = index + 1;
+        logger.log(ind + ` ${userNameInfo}开始执行`);
         const cloudClient = new CloudClient(userName, password);
         await cloudClient.login();
 		//if(index == accounts.length - 1)
