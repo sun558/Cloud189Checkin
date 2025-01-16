@@ -210,7 +210,8 @@ async function main() {
         logger.log(`${userNameInfo}开始执行`);
         const cloudClient = new CloudClient(userName, password);
         await cloudClient.login();
-		if(index == accounts.length - 1){
+		//if(index == accounts.length - 1)
+		{
 		 let  { cloudCapacityInfo, familyCapacityInfo } = await cloudClient.getUserSizeInfo();
 		 
         logger.log(
