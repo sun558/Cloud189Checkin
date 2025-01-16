@@ -219,7 +219,7 @@ async function main() {
             1024 /
             1024 /
             1024
-          ).toFixed(2)}G,家庭容量：${(
+          ).toFixed(2)}G, 家庭容量：${(
             familyCapacityInfo.totalSize /
             1024 /
             1024 /
@@ -248,7 +248,7 @@ async function main() {
             1024 /
             1024 /
             1024
-          ).toFixed(2)}G,家庭容量：${(
+          ).toFixed(2)}G, 家庭容量：${(
             familyCapacityInfo.totalSize /
             1024 /
             1024 /
