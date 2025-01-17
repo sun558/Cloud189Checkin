@@ -200,35 +200,60 @@ const push = (title, desp) => {
 async function main() {
 	const familySpace = [];
 	let sum = 0;
-  for (let index = 0; index < accounts.length; index += 1) {
-    const account = accounts[index];
-    const { userName, password } = account;
+	let lastSpace ;
 	
+  for (let index = 0; index < accounts.length; index += 1) {
+   
+	
+	if(index == 0)
+		{
+			
+		  let account1 = accounts[accounts.length-1];
+		  let { userName, password } = account1;
+		  if (userName && password){
+			const userNameInfo1 = mask(userName, 3, 7); 
+            try{
+                 const cloudClient1 = new CloudClient(userName, password);
+                   await cloudClient1.login();				
+		 let  { cloudCapacityInfo, familyCapacityInfo } = await cloudClient1.getUserSizeInfo();
+		
+		 let lastPer =  cloudCapacityInfo.totalSize /
+            1024 /
+            1024 /
+            1024;
+		   let  lastFam =  familyCapacityInfo.totalSize /
+            1024 /
+            1024 /
+            1024;
+		   
+		 
+        lastSpace = 
+          "前：个人："+lastPer.toFixed(3) + "G, 家庭："+ lastFam.toFixed(3) + "G ";
+          
+			
+		
+		}
+		
+		catch (e) {
+        logger.error(e);
+        if (e.code === "ETIMEDOUT") {
+          throw e;
+        }
+      } 
+		}
+		}
+	const account = accounts[index];
+    const { userName, password } = account;
+
     if (userName && password) {
       const userNameInfo = mask(userName, 3, 7);
       try {
 		let ind = index + 1;
-        logger.log(ind + ` ${userNameInfo}开始执行`);
+        logger.log(ind + `. ${userNameInfo}开始执行`);
         const cloudClient = new CloudClient(userName, password);
         await cloudClient.login();
-		//if(index == accounts.length - 1)
-		{
-		 let  { cloudCapacityInfo, familyCapacityInfo } = await cloudClient.getUserSizeInfo();
-		 
-        logger.log(
-          `前：个人：${(
-            cloudCapacityInfo.totalSize /
-            1024 /
-            1024 /
-            1024
-          ).toFixed(2)}G, 家庭：${(
-            familyCapacityInfo.totalSize /
-            1024 /
-            1024 /
-            1024
-          ).toFixed(2)}G`
-        );
-		
+		if(index == accounts.length - 1){
+			logger.log(lastSpace);
 		}
         const result = await doTask(cloudClient);
         result.forEach((r) => logger.log(r));
@@ -250,12 +275,12 @@ async function main() {
             1024 /
             1024 /
             1024
-          ).toFixed(2)}G, 家庭：${(
+          ).toFixed(3)}G, 家庭：${(
             familyCapacityInfo.totalSize /
             1024 /
             1024 /
             1024
-          ).toFixed(2)}G`
+          ).toFixed(3)}G`
         );
       } catch (e) {
         logger.error(e);
