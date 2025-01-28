@@ -307,13 +307,13 @@ async function main() {
     }
 	      
   } 
-           
+                  logger.log(`  `);
 		  if(familySpace.length> 1 ){
 			  familySpace.forEach(function(value){
 				 sum += value;
 			  });
-		  logger.log('家庭云今日签到'+familySpace.length+'次, 获得：');
-		  logger.log(familySpace.join(' + ') +' = ' +sum + "M");
+		  	logger.log('家庭云今日签到'+familySpace.length+'次, 获得：');
+		  	logger.log(familySpace.join(' + ') +' = ' +sum + "M");
 		  }
 		  logger.log(`  `);
 		  
