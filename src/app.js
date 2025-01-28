@@ -59,9 +59,18 @@ const doTask = async (cloudClient) => {
 const doFamilyTask = async (cloudClient) => {
   const { familyInfoResp } = await cloudClient.getFamilyList();
   const result = [];
+   let family_id ;
   if (familyInfoResp) {
-      const { familyId } = familyInfoResp[0];
-      const res = await cloudClient.familyUserSign(familyId);
+      if(!process.env.FAMILY_ID){
+		 const  { familyId }  = familyInfoResp[0];
+		  family_id  = familyId;
+		  console.log("11111111111");
+         		  
+	  }else{
+		  family_id  = process.env.FAMILY_ID;
+		 console.log("222222222");	
+	  }
+      const res = await cloudClient.familyUserSign(family_id);
 	  
 	 
       result.push({
