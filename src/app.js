@@ -225,7 +225,7 @@ async function main() {
 	  if(index == 0){
 		   logger.log( `${userNameInfo}开始执行`);
 	  }   
-	   
+	   console.log( `${userNameInfo}开始执行`)
         const cloudClient = new CloudClient(userName, password);
         await cloudClient.login();
 		 if(index == 0){
@@ -262,7 +262,7 @@ async function main() {
 	);
 		
         
-        
+        console.log('');
 		  
 		  
 		   if(index == accounts.length-1)
@@ -272,7 +272,7 @@ async function main() {
 		  let { userName, password } = account1;
 		  if (userName && password){
 			const userNameInfo1 = mask(userName, 3, 7); 
-            try{
+            
                  const cloudClient1 = new CloudClient(userName, password);
                    await cloudClient1.login();				
 		 let  { cloudCapacityInfo, familyCapacityInfo } = await cloudClient1.getUserSizeInfo();
@@ -289,17 +289,7 @@ async function main() {
 		 
         logger.log(
           "后：个人："+lastPer.toFixed(3) + "G, 家庭："+ lastFam.toFixed(3) + "G ");
-          
-			
-		
-		}
-		
-		catch (e) {
-        logger.error(e);
-        if (e.code === "ETIMEDOUT") {
-          throw e;
-        }
-      } 
+          		
 		}
 		}
       } catch (e) {
