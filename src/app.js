@@ -209,9 +209,13 @@ const push = (title, desp) => {
 async function main() {
 	const familySpace = [];
 	let sum = 0;
-		
-  for (let index = 0; index < accounts.length; index += 1) {	
-    const account = accounts[index];
+	
+	
+  for (let index = 0; index < accounts.length; index += 1) {
+   
+	
+	
+	const account = accounts[index];
     const { userName, password } = account;
 
     if (userName && password) {
@@ -221,7 +225,7 @@ async function main() {
 	  if(index == 0){
 		   logger.log( `${userNameInfo}开始执行`);
 	  }   
-	   
+	   console.log( `${userNameInfo}开始执行`)
         const cloudClient = new CloudClient(userName, password);
         await cloudClient.login();
 		 if(index == 0){
@@ -268,7 +272,7 @@ async function main() {
 		  let { userName, password } = account1;
 		  if (userName && password){
 			const userNameInfo1 = mask(userName, 3, 7); 
-            try{
+            
                  const cloudClient1 = new CloudClient(userName, password);
                    await cloudClient1.login();				
 		 let  { cloudCapacityInfo, familyCapacityInfo } = await cloudClient1.getUserSizeInfo();
@@ -285,17 +289,7 @@ async function main() {
 		 
         logger.log(
           "后：个人："+lastPer.toFixed(3) + "G, 家庭："+ lastFam.toFixed(3) + "G ");
-          
-			
-		
-		}
-		
-		catch (e) {
-        logger.error(e);
-        if (e.code === "ETIMEDOUT") {
-          throw e;
-        }
-      } 
+          		
 		}
 		}
       } catch (e) {
@@ -307,13 +301,13 @@ async function main() {
     }
 	      
   } 
-                  logger.log(`  `);
+          logger.log(`  `);
 		  if(familySpace.length> 1 ){
 			  familySpace.forEach(function(value){
 				 sum += value;
 			  });
-		  	logger.log('家庭云今日签到'+familySpace.length+'次, 获得：');
-		  	logger.log(familySpace.join(' + ') +' = ' +sum + "M");
+		  logger.log('家庭云今日签到'+familySpace.length+'次, 获得：');
+		  logger.log(familySpace.join(' + ') +' = ' +sum + "M");
 		  }
 		  logger.log(`  `);
 		  
