@@ -70,7 +70,7 @@ const doFamilyTask = async (cloudClient) => {
 		  family_id  = process.env.FAMILY_ID;
 		
 	  }
-      const res = await cloudClient.familyUserSign(family_id;
+      const res = await cloudClient.familyUserSign(family_id);
 	  
 	 
       result.push({
