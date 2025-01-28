@@ -209,15 +209,62 @@ const push = (title, desp) => {
 async function main() {
 	const familySpace = [];
 	let sum = 0;
-	let lastSpace ;
-	
-  for (let index = 0; index < accounts.length; index += 1) {
-   
-	
-	if(index == 0)
+		
+  for (let index = 0; index < accounts.length; index += 1) {	
+    const account = accounts[index];
+    const { userName, password } = account;
+
+    if (userName && password) {
+      const userNameInfo = mask(userName, 3, 7);
+      try {
+		
+	  if(index == 0){
+		   logger.log( `${userNameInfo}开始执行`);
+	  }   
+	   
+        const cloudClient = new CloudClient(userName, password);
+        await cloudClient.login();
+		 if(index == 0){
+			  let { cloudCapacityInfo, familyCapacityInfo } =
+          await cloudClient.getUserSizeInfo();
+        logger.log(
+          `前：个人：${(
+            cloudCapacityInfo.totalSize /
+            1024 /
+            1024 /
+            1024
+          ).toFixed(3)}G, 家庭：${(
+            familyCapacityInfo.totalSize /
+            1024 /
+            1024 /
+            1024
+          ).toFixed(3)}G` 
+		   
+        )
+		   };
+		
+        const result = await doTask(cloudClient);
+		 if(index == 0){
+			result.forEach((r) => logger.log(r));
+		 }
+        const familyResult = await doFamilyTask(cloudClient);
+        familyResult.forEach((r) => {
+			if(index == 0){
+				logger.log(r.familySent);
+			}
+		     
+			familySpace.push(r.familySpace);
+		}
+	);
+		
+        
+        
+		  
+		  
+		   if(index == accounts.length-1)
 		{
 			
-		  let account1 = accounts[accounts.length-1];
+		  let account1 = accounts[0];
 		  let { userName, password } = account1;
 		  if (userName && password){
 			const userNameInfo1 = mask(userName, 3, 7); 
@@ -236,8 +283,8 @@ async function main() {
             1024;
 		   
 		 
-        lastSpace = 
-          "前：个人："+lastPer.toFixed(3) + "G, 家庭："+ lastFam.toFixed(3) + "G ";
+        logger.log(
+          "后：个人："+lastPer.toFixed(3) + "G, 家庭："+ lastFam.toFixed(3) + "G ");
           
 			
 		
@@ -251,55 +298,12 @@ async function main() {
       } 
 		}
 		}
-	const account = accounts[index];
-    const { userName, password } = account;
-
-    if (userName && password) {
-      const userNameInfo = mask(userName, 3, 7);
-      try {
-		let ind = index + 1;
-        logger.log(ind + `. ${userNameInfo}开始执行`);
-        const cloudClient = new CloudClient(userName, password);
-        await cloudClient.login();
-		if(index == accounts.length - 1){
-			logger.log(lastSpace);
-		}
-        const result = await doTask(cloudClient);
-        result.forEach((r) => logger.log(r));
-        const familyResult = await doFamilyTask(cloudClient);
-        familyResult.forEach((r) => {
-			logger.log(r.familySent);
-		     
-			familySpace.push(r.familySpace);
-		}
-	);
-		
-        
-         let { cloudCapacityInfo, familyCapacityInfo } =
-          await cloudClient.getUserSizeInfo();
-		  
-        logger.log(
-          `后：个人：${(
-            cloudCapacityInfo.totalSize /
-            1024 /
-            1024 /
-            1024
-          ).toFixed(3)}G, 家庭：${(
-            familyCapacityInfo.totalSize /
-            1024 /
-            1024 /
-            1024
-          ).toFixed(3)}G`
-        );
       } catch (e) {
         logger.error(e);
         if (e.code === "ETIMEDOUT") {
           throw e;
         }
-      } finally {
-         logger.log(`  `);
-		 
-      }
+      } 
     }
 	      
   } 
@@ -308,7 +312,7 @@ async function main() {
 			  familySpace.forEach(function(value){
 				 sum += value;
 			  });
-		  logger.log('家庭云今日获得：');
+		  logger.log('家庭云今日签到'+familySpace.length+'次, 获得：');
 		  logger.log(familySpace.join(' + ') +' = ' +sum + "M");
 		  }
 		  logger.log(`  `);
