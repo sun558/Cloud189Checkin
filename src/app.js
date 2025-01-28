@@ -64,11 +64,11 @@ const doFamilyTask = async (cloudClient) => {
      if(!process.env.FAMILY_ID){
 		 const  { familyId }  = familyInfoResp[0];
 		  family_id  = familyId;
-		console.log("11111111111");
+		
          		  
 	  }else{
 		  family_id  = process.env.FAMILY_ID;
-		console.log("2222222222");
+		
 	  }
       const res = await cloudClient.familyUserSign(family_id);
 	  
