@@ -306,11 +306,19 @@ async function main() {
 			  familySpace.forEach(function(value){
 				 sum += value;
 			  });
-		  logger.log('家庭云今日签到'+familySpace.length+'次, 获得：');
+		  logger.log('家庭签到: '+familySpace.length+'  获得: '+sum );
 		  logger.log(familySpace.join(' + ') +' = ' +sum + "M");
 		  }
 		  logger.log(`  `);
 		  
+}
+
+function getLineIndex(str,lineIndex){
+	//按换行符分割成数组（兼容不同系统的换行符）
+	
+		const lines = str.split(/\r?\n/);
+		return lineIndex >= 0 ? String(lines[lineIndex]) : "";
+
 }
 
 (async () => {
@@ -319,7 +327,7 @@ async function main() {
   } finally {
     const events = recording.replay();
     const content = events.map((e) => `${e.data.join("")}`).join("  \n");
-    push("天翼云盘自动签到任务", content);
+    push(content.substr(9,2)+getLineIndex(content,content.split(/\r?\n/).length - 3), content);
     recording.erase();
   }
 })();
