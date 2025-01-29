@@ -306,7 +306,7 @@ async function main() {
 			  familySpace.forEach(function(value){
 				 sum += value;
 			  });
-		  logger.log('家庭签到: '+ sum +'M  次数: '+familySpace.length );
+		  logger.log('家庭签到: '+ sum +'M 次数: '+familySpace.length );
 		  logger.log(familySpace.join(' + ') +' = ' +sum + "M");
 		  }
 		  logger.log(`  `);
