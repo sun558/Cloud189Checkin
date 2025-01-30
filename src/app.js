@@ -58,34 +58,19 @@ const doTask = async (cloudClient) => {
 
 const doFamilyTask = async (cloudClient) => {
   const { familyInfoResp } = await cloudClient.getFamilyList();
-  const result = [];
-  let family_id ;
-  if (familyInfoResp) {
-     if(!process.env.FAMILY_ID){
-		 const  { familyId }  = familyInfoResp[0];
-		  family_id  = familyId;
-		
-         		  
-	  }else{
-		  family_id  = process.env.FAMILY_ID;
-		
-	  }
-      const res = await cloudClient.familyUserSign(family_id);
-	  
-	 
-      result.push({
-		  familySent:
-        "家庭" +
-          `${res.signStatus ? "已经签到过了，" : ""}签到获得${
-            res.bonusSpace
-          }M空间`,
-		  familySpace: res.bonusSpace
-      
-	  }
-	  )
-    }
-  
-  return result;
+  if (!familyInfoResp || familyInfoResp.length === 0) return [];
+
+  // 使用环境变量或从响应中获取family_id
+  const family_id = process.env.FAMILY_ID || familyInfoResp[0].familyId;
+
+  // 获取签到结果
+  const res = await cloudClient.familyUserSign(family_id);
+
+  // 构建并返回结果
+  return [{
+    familySent: `家庭${res.signStatus ? "已经签到过了，" : ""}签到获得${res.bonusSpace}M空间`,
+    familySpace: res.bonusSpace
+  }];
 };
 
 const pushServerChan = (title, desp) => {
@@ -233,6 +218,7 @@ async function main() {
   const MASK_RANGE = [3, 7];
   const familySpace = [];
   let sum = 0;
+  const errorMessages = []; // 单独存储错误信息
 
   // 封装容量格式化逻辑
   const formatSize = (bytes) => (bytes / GB_DIVISOR).toFixed(3);
@@ -250,13 +236,12 @@ async function main() {
     if (!userName || !password) continue;
 
     const userNameInfo = mask(userName, ...MASK_RANGE);
-    
+
     try {
       // 保留原始日志顺序和格式
       if (index === 0) {
         logger.log(`${userNameInfo}开始执行`);
       }
-      console.log(`${userNameInfo}开始执行`);
 
       const cloudClient = new CloudClient(userName, password);
       await cloudClient.login();
@@ -297,20 +282,39 @@ async function main() {
         }
       }
     } catch (e) {
-      logger.error(e);
+      const errorMessage = `账号 ${userNameInfo} 错误: ${e.message || e}`;
+      //logger.error(errorMessage);
+      errorMessages.push(errorMessage); // 将错误信息添加到错误消息列表中
+
+      // 如果你想在遇到特定错误时中断程序，可以在这里抛出异常
       if (e.code === "ETIMEDOUT") throw e;
     }
   }
 
+  
+
+  // 输出错误信息（如果有）
+  if (errorMessages.length > 0) {
+	  originalLog(`  `);
+    originalLog(`错误信息:`);
+    errorMessages.forEach(msg => originalLog(msg));
+  }
+  
   // 保持原始统计输出格式
   originalLog(`  `);
-  if (familySpace.length > 1) {
-    familySpace.forEach(value => sum += value);
+  if (familySpace.length > 0) {
+    familySpace.forEach(value => {
+      sum += value;
+    });
     originalLog(`家庭签到: ${sum}M 次数: ${familySpace.length}`);
     originalLog(familySpace.join(' + ') + ' = ' + sum + "M");
   }
   originalLog(`  `);
 }
+
+
+
+
 
 
 function getLineIndex(str, lineIndex) {
