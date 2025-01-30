@@ -170,32 +170,54 @@ const pushWecomBot = (title, desp) => {
     });
 };
 
-const pushWxPusher = (title, desp) => {
-  if (!(wxpush.appToken && wxpush.uid)) {
-    return;
+const pushWxPusher = async (title, desp) => {
+  try {
+    // 参数校验
+    if (!wxpush?.appToken || !wxpush?.uid) {
+      const errorMsg = 'WxPusher 配置缺失: appToken 或 uid 未设置';
+      logger.error(errorMsg);
+      throw new Error(errorMsg);
+    }
+
+    // 内容长度校验（避免转为链接）
+    if (desp.length > 40000) {
+      logger.warn('内容过长，可能被截断');
+      desp = desp.substring(0, 40000);
+    }
+
+    // 构建请求体
+    const data = {
+      appToken: wxpush.appToken,
+      contentType: 1, // 1=文本，2=HTML
+      summary: title.substring(0, 20), // 摘要限制20字符
+      content: desp,
+      uids: [wxpush.uid],
+    };
+
+    // 发送请求
+    const res = await superagent
+      .post('https://wxpusher.zjiecode.com/api/send/message')
+      .set('Content-Type', 'application/json') // 显式设置请求头
+      .send(data);
+
+    // 处理响应
+    if (res.status !== 200) {
+      throw new Error(`HTTP 状态码异常: ${res.status}`);
+    }
+
+    const responseData = res.body?.data?.[0];
+    if (!responseData || responseData.code !== 1000) {
+      const errorMsg = `推送失败: ${responseData?.msg || '未知错误'}`;
+      logger.error(errorMsg);
+      throw new Error(errorMsg);
+    }
+
+    logger.info('WxPusher 推送成功');
+    return true;
+  } catch (err) {
+    logger.error(`推送异常: ${err.message}`, { error: err.stack });
+    throw err; // 向上抛出错误供调用方处理
   }
-  const data = {
-    appToken: wxpush.appToken,
-    contentType: 1,
-    summary: title,
-    content: desp,
-    uids: [wxpush.uid],
-  };
-  superagent
-    .post("https://wxpusher.zjiecode.com/api/send/message")
-    .send(data)
-    .end((err, res) => {
-      if (err) {
-        logger.error(`wxPusher推送失败:${JSON.stringify(err)}`);
-        return;
-      }
-      const json = JSON.parse(res.text);
-      if (json.data[0].code !== 1000) {
-        logger.error(`wxPusher推送失败:${JSON.stringify(json)}`);
-      } else {
-        logger.info("wxPusher推送成功");
-      }
-    });
 };
 
 const push = (title, desp) => {
@@ -207,127 +229,132 @@ const push = (title, desp) => {
 
 // 开始执行程序
 async function main() {
-	const familySpace = [];
-	let sum = 0;
-	
-	
-  for (let index = 0; index < accounts.length; index += 1) {
-   
-	
-	
-	const account = accounts[index];
+  const GB_DIVISOR = 1024 * 1024 * 1024;
+  const MASK_RANGE = [3, 7];
+  const familySpace = [];
+  let sum = 0;
+
+  // 封装容量格式化逻辑
+  const formatSize = (bytes) => (bytes / GB_DIVISOR).toFixed(3);
+
+  // 保留原始日志格式的打印函数
+  const originalLog = (message) => {
+    console.log('');
+    logger.log(message);
+  };
+
+  for (let index = 0; index < accounts.length; index++) {
+    const account = accounts[index];
     const { userName, password } = account;
 
-    if (userName && password) {
-      const userNameInfo = mask(userName, 3, 7);
-      try {
-		
-	  if(index == 0){
-		   logger.log( `${userNameInfo}开始执行`);
-	  }   
-	   console.log( `${userNameInfo}开始执行`)
-        const cloudClient = new CloudClient(userName, password);
-        await cloudClient.login();
-		 if(index == 0){
-			  let { cloudCapacityInfo, familyCapacityInfo } =
-          await cloudClient.getUserSizeInfo();
-        logger.log(
-          `前：个人：${(
-            cloudCapacityInfo.totalSize /
-            1024 /
-            1024 /
-            1024
-          ).toFixed(3)}G, 家庭：${(
-            familyCapacityInfo.totalSize /
-            1024 /
-            1024 /
-            1024
-          ).toFixed(3)}G` 
-		   
-        )
-		   };
-		
-        const result = await doTask(cloudClient);
-		 if(index == 0){
-			result.forEach((r) => logger.log(r));
-		 }
-        const familyResult = await doFamilyTask(cloudClient);
-        familyResult.forEach((r) => {
-			if(index == 0){
-				logger.log(r.familySent);
-			}
-		     
-			familySpace.push(r.familySpace);
-		}
-	);
-		
-        
-        console.log('');
-		  
-		  
-		   if(index == accounts.length-1)
-		{
-			
-		  let account1 = accounts[0];
-		  let { userName, password } = account1;
-		  if (userName && password){
-			const userNameInfo1 = mask(userName, 3, 7); 
-            
-                 const cloudClient1 = new CloudClient(userName, password);
-                   await cloudClient1.login();				
-		 let  { cloudCapacityInfo, familyCapacityInfo } = await cloudClient1.getUserSizeInfo();
-		
-		 let lastPer =  cloudCapacityInfo.totalSize /
-            1024 /
-            1024 /
-            1024;
-		   let  lastFam =  familyCapacityInfo.totalSize /
-            1024 /
-            1024 /
-            1024;
-		   
-		 
-        logger.log(
-          "后：个人："+lastPer.toFixed(3) + "G, 家庭："+ lastFam.toFixed(3) + "G ");
-          		
-		}
-		}
-      } catch (e) {
-        logger.error(e);
-        if (e.code === "ETIMEDOUT") {
-          throw e;
+    if (!userName || !password) continue;
+
+    const userNameInfo = mask(userName, ...MASK_RANGE);
+    
+    try {
+      // 保留原始日志顺序和格式
+      if (index === 0) {
+        logger.log(`${userNameInfo}开始执行`);
+      }
+      console.log(`${userNameInfo}开始执行`);
+
+      const cloudClient = new CloudClient(userName, password);
+      await cloudClient.login();
+
+      // 保留首次账户的容量记录
+      if (index === 0) {
+        const { cloudCapacityInfo, familyCapacityInfo } = await cloudClient.getUserSizeInfo();
+        logger.log(`前：个人：${formatSize(cloudCapacityInfo.totalSize)}G, 家庭：${
+          formatSize(familyCapacityInfo.totalSize)
+        }G`);
+      }
+
+      // 保持任务执行顺序
+      const result = await doTask(cloudClient);
+      if (index === 0) {
+        result.forEach(r => logger.log(r));
+      }
+
+      // 保持家庭任务处理方式
+      const familyResult = await doFamilyTask(cloudClient);
+      familyResult.forEach(r => {
+        if (index === 0) {
+          logger.log(r.familySent);
         }
-      } 
+        familySpace.push(r.familySpace);
+      });
+
+      // 保留最后一个账户的容量检查
+      if (index === accounts.length - 1) {
+        const firstAccount = accounts[0];
+        if (firstAccount.userName && firstAccount.password) {
+          const client = new CloudClient(firstAccount.userName, firstAccount.password);
+          await client.login();
+          const { cloudCapacityInfo, familyCapacityInfo } = await client.getUserSizeInfo();
+          originalLog(`后：个人：${formatSize(cloudCapacityInfo.totalSize)}G, 家庭：${
+            formatSize(familyCapacityInfo.totalSize)
+          }G`);
+        }
+      }
+    } catch (e) {
+      logger.error(e);
+      if (e.code === "ETIMEDOUT") throw e;
     }
-	      
-  } 
-          logger.log(`  `);
-		  if(familySpace.length> 1 ){
-			  familySpace.forEach(function(value){
-				 sum += value;
-			  });
-		  logger.log('家庭签到: '+ sum +'M 次数: '+familySpace.length );
-		  logger.log(familySpace.join(' + ') +' = ' +sum + "M");
-		  }
-		  logger.log(`  `);
-		  
+  }
+
+  // 保持原始统计输出格式
+  originalLog(`  `);
+  if (familySpace.length > 1) {
+    familySpace.forEach(value => sum += value);
+    originalLog(`家庭签到: ${sum}M 次数: ${familySpace.length}`);
+    originalLog(familySpace.join(' + ') + ' = ' + sum + "M");
+  }
+  originalLog(`  `);
 }
 
-function getLineIndex(str,lineIndex){
-	//按换行符分割成数组（兼容不同系统的换行符）
-	
-		const lines = str.split(/\r?\n/);
-		return lineIndex >= 0 ? String(lines[lineIndex]) : "";
 
+function getLineIndex(str, lineIndex) {
+  // 参数校验
+  if (typeof str !== 'string' || !Number.isInteger(lineIndex)) {
+    return '';
+  }
+
+  // 单次分割处理（兼容不同系统换行符）
+  const lines = str.split(/\r?\n/);
+  
+  // 处理边界情况
+  return lineIndex >= 0 && lineIndex < lines.length 
+    ? String(lines[lineIndex]).trim() // 移除前后空格
+    : '';
 }
 
 (async () => {
   try {
     await main();
+  } catch (error) {
+    logger.error('主程序执行失败:', error);
   } finally {
-    const events = recording.replay();
-    const content = events.map((e) => `${e.data.join("")}`).join("  \n");
-    push(content.substr(9,2)+getLineIndex(content,content.split(/\r?\n/).length - 3), content);
-    recording.erase();
+    try {
+      const events = recording.replay();
+      const content = events
+        .map(event => event.data.join(""))
+        .join("  \n"); // 使用双空格+换行符分隔
+
+      // 构造推送内容
+      const lineCount = content.split('\n').length;
+      const firstPart = content.slice(9, 11); // 更安全的字符串截取方式
+      const lastThirdLine = getLineIndex(content, lineCount - 3);
+      
+      // 添加推送容错机制
+      await push(
+        `${firstPart}${lastThirdLine}`,
+        content
+      );
+    } catch (pushError) {
+      logger.error('推送处理失败:', pushError);
+    } finally {
+      recording.erase();
+      logger.info('日志记录已清理');
+    }
   }
 })();
