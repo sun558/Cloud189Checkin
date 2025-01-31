@@ -218,12 +218,11 @@ async function main() {
   const MASK_RANGE = [3, 7];
   const familySpace = [];
   let sum = 0;
-  const errorMessages = []; // 单独存储错误信息
+  const errorMessages = [];
+  const MAX_RETRIES = 5; // 最大重试次数  
 
-  // 封装容量格式化逻辑
   const formatSize = (bytes) => (bytes / GB_DIVISOR).toFixed(3);
 
-  // 保留原始日志格式的打印函数
   const originalLog = (message) => {
     console.log('');
     logger.log(message);
@@ -232,87 +231,100 @@ async function main() {
   for (let index = 0; index < accounts.length; index++) {
     const account = accounts[index];
     const { userName, password } = account;
-
     if (!userName || !password) continue;
 
     const userNameInfo = mask(userName, ...MASK_RANGE);
+    let retryCount = 0;
+    let success = false;
+    let lastError = null;
+	let familySpaceIndex = 1 ;
 
-    try {
-      // 保留原始日志顺序和格式
-      if (index === 0) {
-        logger.log(`${userNameInfo}开始执行`);
-      }
-
-      const cloudClient = new CloudClient(userName, password);
-      await cloudClient.login();
-
-      // 保留首次账户的容量记录
-      if (index === 0) {
-        const { cloudCapacityInfo, familyCapacityInfo } = await cloudClient.getUserSizeInfo();
-        logger.log(`前：个人：${formatSize(cloudCapacityInfo.totalSize)}G, 家庭：${
-          formatSize(familyCapacityInfo.totalSize)
-        }G`);
-      }
-
-      // 保持任务执行顺序
-      const result = await doTask(cloudClient);
-      if (index === 0) {
-        result.forEach(r => logger.log(r));
-      }
-
-      // 保持家庭任务处理方式
-      const familyResult = await doFamilyTask(cloudClient);
-      familyResult.forEach(r => {
-        if (index === 0) {
-          logger.log(r.familySent);
+    while (retryCount <= MAX_RETRIES && !success) {
+      try {
+        // 仅第一次尝试时输出开始执行
+        if (index === 0 && retryCount === 0) {
+          logger.log(`${userNameInfo}开始执行`);
         }
-        familySpace.push(r.familySpace);
-      });
 
-      // 保留最后一个账户的容量检查
-      if (index === accounts.length - 1) {
-        const firstAccount = accounts[0];
-        if (firstAccount.userName && firstAccount.password) {
-          const client = new CloudClient(firstAccount.userName, firstAccount.password);
-          await client.login();
-          const { cloudCapacityInfo, familyCapacityInfo } = await client.getUserSizeInfo();
-          originalLog(`后：个人：${formatSize(cloudCapacityInfo.totalSize)}G, 家庭：${
+        const cloudClient = new CloudClient(userName, password);
+        await cloudClient.login();
+
+        // 首次账户的容量记录
+        if (index === 0 ) {
+          const { cloudCapacityInfo, familyCapacityInfo } = await cloudClient.getUserSizeInfo();
+          logger.log(`前：个人：${formatSize(cloudCapacityInfo.totalSize)}G, 家庭：${
             formatSize(familyCapacityInfo.totalSize)
           }G`);
         }
-      }
-    } catch (e) {
-      const errorMessage = `账号 ${userNameInfo} 错误: ${e.message || e}`;
-      //logger.error(errorMessage);
-      errorMessages.push(errorMessage); // 将错误信息添加到错误消息列表中
 
-      // 如果你想在遇到特定错误时中断程序，可以在这里抛出异常
-      if (e.code === "ETIMEDOUT") throw e;
+        // 执行普通任务
+        const result = await doTask(cloudClient);
+        if (index === 0) result.forEach(r => logger.log(r));
+
+        // 执行家庭任务
+        const familyResult = await doFamilyTask(cloudClient);
+        familyResult.forEach(r => {
+          if (index === 0) logger.log(r.familySent);
+		  if(familySpaceIndex === 1 ){
+			familySpace.push(r.familySpace);
+		  }
+        });
+
+        // 最后一个账户检查容量
+        if (index === accounts.length - 1) {
+		   familySpaceIndex ++;
+          const firstAccount = accounts[0];
+          if (firstAccount.userName && firstAccount.password) {
+            const client = new CloudClient(firstAccount.userName, firstAccount.password);
+            await client.login();
+            const { cloudCapacityInfo, familyCapacityInfo } = await client.getUserSizeInfo();
+            originalLog(`后：个人：${formatSize(cloudCapacityInfo.totalSize)}G, 家庭：${
+              formatSize(familyCapacityInfo.totalSize)
+            }G`);
+          }		  
+        }
+
+        success = true; // 标记执行成功
+      } catch (e) {
+        lastError = e;
+        if (e.code === "ETIMEDOUT" && retryCount < MAX_RETRIES) {
+          // 随机等待100-500秒
+          const waitTime = Math.floor(Math.random() * 400000) + 100000;
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+          retryCount++;
+        } else {
+          break;
+        }
+      }
+    }
+
+    if (!success) {
+      const errorMessage = `账号 ${userNameInfo} 错误: ${lastError.message || lastError}`;
+      errorMessages.push(errorMessage);
+
+      // 超时重试次数用尽时中断程序
+      if (lastError.code === "ETIMEDOUT" && retryCount >= MAX_RETRIES) {
+        throw lastError;
+      }
     }
   }
 
-  
-
-  // 输出错误信息（如果有）
+  // 错误信息输出
   if (errorMessages.length > 0) {
-	  originalLog(`  `);
+    originalLog(`  `);
     originalLog(`错误信息:`);
     errorMessages.forEach(msg => originalLog(msg));
   }
-  
-  // 保持原始统计输出格式
+
+  // 统计信息输出
   originalLog(`  `);
   if (familySpace.length > 0) {
-    familySpace.forEach(value => {
-      sum += value;
-    });
+    familySpace.forEach(value => sum += value);
     originalLog(`家庭签到: ${sum}M 次数: ${familySpace.length}`);
     originalLog(familySpace.join(' + ') + ' = ' + sum + "M");
   }
   originalLog(`  `);
 }
-
-
 
 
 
