@@ -237,8 +237,8 @@ async function main() {
     let retryCount = 0;
     let success = false;
     let lastError = null;
-	let familySpaceIndex = 1 ;
-
+	let familyProcessed = false; // [!code ++] 新增处理标记
+	
     while (retryCount <= MAX_RETRIES && !success) {
       try {
         // 仅第一次尝试时输出开始执行
@@ -261,18 +261,18 @@ async function main() {
         const result = await doTask(cloudClient);
         if (index === 0) result.forEach(r => logger.log(r));
 
-        // 执行家庭任务
+        // 执行家庭任务[!code focus:5]
         const familyResult = await doFamilyTask(cloudClient);
-        familyResult.forEach(r => {
-          if (index === 0) logger.log(r.familySent);
-		  if(familySpaceIndex === 1 ){
-			familySpace.push(r.familySpace);
-		  }
-        });
+        if (!familyProcessed) { // [!code ++] 仅在未处理时添加
+          familyResult.forEach(r => {
+            if (index === 0) logger.log(r.familySent);
+            familySpace.push(r.familySpace);
+          });
+          familyProcessed = true; // [!code ++] 标记为已处理
+        }
 
         // 最后一个账户检查容量
         if (index === accounts.length - 1) {
-		   familySpaceIndex ++;
           const firstAccount = accounts[0];
           if (firstAccount.userName && firstAccount.password) {
             const client = new CloudClient(firstAccount.userName, firstAccount.password);
