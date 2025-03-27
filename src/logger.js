@@ -1,4 +1,3 @@
-
 const log4js = require("log4js");
 const fs = require("fs");
 
@@ -11,7 +10,7 @@ log4js.configure({
       type: "console",
       layout: {
         type: "pattern",
-        pattern: "[%d] [%p] %X{user}: %m",
+        pattern: "[%d] [%p] %X{user} %m",
       },
     },
     file: {
@@ -24,7 +23,7 @@ log4js.configure({
       compress: true,
       layout: {
         type: "pattern",
-        pattern: "[账号：%X{user}] %m",
+        pattern: "%X{user} %m",
       },
     },
   },
