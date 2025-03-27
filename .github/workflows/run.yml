@@ -1,4 +1,4 @@
-name: Cloud check10 in action
+name: Cloud check in action
 on:
   push:
     branches:
@@ -7,11 +7,11 @@ on:
     types: started
   workflow_dispatch:
   schedule:
-    - cron: 05 21 * * *
+    - cron: 35 2 * * *
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    environment: user10
+    environment: user
     steps:
       - name: 🔀 random delay 0-300 seconds
         run: sleep $((RANDOM % 301))
@@ -52,7 +52,7 @@ jobs:
       - name: 🚀 Run
         uses: nick-fields/retry@master
         with:
-          timeout_minutes: 10
+          timeout_minutes: 30
           max_attempts: 3
           command: npm start
       
