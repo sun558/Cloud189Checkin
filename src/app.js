@@ -62,7 +62,7 @@ const doFamilyTask = async (cloudClient, logger, index) => {
     }
 	
 	// 根据主账号判断并发次数
-	const concurrency = index == 0 ? 1 : getRandomConcurrency(execThreshold); 
+	const concurrency = index == 0 ? 1 : execThreshold; 
 	// 定义任务数组
 	const tasks = [];
 	const validResults = [];
