@@ -13,9 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: user10-2
     steps:
-      - name: 🔀 random delay 0-300 seconds
-        run: sleep $((RANDOM % 301))
-
+     
       - name: 🔌 Check out code
         uses: actions/checkout@main
 
