@@ -22,8 +22,8 @@ const doUserTask = async (cloudClient, logger, index) => {
   );
   logger.info(
     `${result.length}/${tasks.length} 个人获得(M): ${
-			result.map((res) => res.netdiskBonus)?.join(" ") || "0"
-			}`
+      result.map(({ value }) => value.netdiskBonus)?.join(" ") || "0"
+    }`
   );
   await delay(2000); // 延迟2秒
 };
