@@ -10,12 +10,12 @@ const { log4js, cleanLogs, catLogs } = require("./logger");
 const execThreshold = process.env.EXEC_THRESHOLD || 1;
 const tokenDir = ".token";
 let userSizeInfoLast, userSizeInfoInitial,firstUserName;  //主账号信息
-const mainAccount = process.env.MAIN_ACCOUNT || false;
+const isMainAccount = process.env.IS_MAIN_ACCOUNT || false;
 
 
 // 个人任务签到
 const doUserTask = async (cloudClient, logger, index) => {
-	if (!mainAccount || index >= 1) return;
+	if (!isMainAccount || index >= 1) return;
   const tasks = Array.from({ length: 1 }, () =>
     cloudClient.userSign()
   );
@@ -87,7 +87,7 @@ const run = async (userName, password, userSizeInfoMap, logger,index,acquireFami
         cloudClient,
         logger,
       });
-	   if(mainAccount && index == 0){
+	   if(isMainAccount && index == 0){
 			firstUserName = userName;
 			userSizeInfoInitial = await cloudClient.getUserSizeInfo();
 			userSizeInfoLast = userSizeInfoInitial;
@@ -96,7 +96,7 @@ const run = async (userName, password, userSizeInfoMap, logger,index,acquireFami
        await doUserTask(cloudClient, logger,index);
        await doFamilyTask(cloudClient, logger,index,acquireFamilyTotalSize);
 		
-		if(mainAccount){
+		if(isMainAccount){
 			//重新获取主账号的空间信息		  
 			let {cloudClient: firstCloudClient} = userSizeInfoMap.get(firstUserName);
 			let afterUserSizeInfo = await firstCloudClient.getUserSizeInfo();
@@ -150,7 +150,7 @@ async function main() {
   //主账号详情
   
   for (const [userName,{ cloudClient, logger }] of userSizeInfoMap) {
-	 if(mainAccount){
+	 if(isMainAccount){
 		const userNameInfo = mask(firstUserName, 3, 7);
 		const afterUserSizeInfo = await cloudClient.getUserSizeInfo();
 		logger.log(`账号 ${userNameInfo}:`);
@@ -219,7 +219,7 @@ async function main() {
     const events = recording.replay();
     const content = events.map((e) => `${e.data.join("")}`).join("  \n");
 
-	const userNameInfo = mainAccount? mask(firstUserName, 3, 7).slice(7, 12):" ";
+	const userNameInfo = isMainAccount? mask(firstUserName, 3, 7).slice(7, 12):" ";
 	const target = "家庭容量";
 	const targetIndex = logs.indexOf(target);
 	const startIndex = targetIndex + target.length;
