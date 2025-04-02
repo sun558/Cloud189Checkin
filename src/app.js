@@ -7,20 +7,31 @@ const families = require("../families");
 const { mask, delay } = require("./utils");
 const push = require("./push");
 const { log4js, cleanLogs, catLogs } = require("./logger");
+ const logger = log4js.getLogger();
+    logger.addContext("user", "" );
 const execThreshold = process.env.EXEC_THRESHOLD || 1;
 const tokenDir = ".token";
-let userSizeInfoLast, userSizeInfoInitial,firstUserName;  //主账号信息
+let firstUserName;  //主账号
+const isMainAccount = true;
+const originalLog = (message) => {
+    console.log('');
+    logger.log(message);
+  };
+  let accountIndex = 1;  //家庭序号
+
+
 
 // 个人任务签到
-const doUserTask = async (cloudClient, logger, index) => {
-	if (index >= 1) return;
+const doUserTask = async (cloudClient) => {
+	if (!isMainAccount || accountIndex > 1)  return;
+
   const tasks = Array.from({ length: 1 }, () =>
     cloudClient.userSign()
   );
   const result = (await Promise.allSettled(tasks)).filter(
     ({ status, value }) => status === "fulfilled" && !value.isSign
   );
-  logger.info(
+   console.log(
     `${result.length}/${tasks.length} 个人获得(M): ${
       result.map(({ value }) => value.netdiskBonus)?.join(" ") || "0"
     }`
@@ -29,25 +40,15 @@ const doUserTask = async (cloudClient, logger, index) => {
 };
 
 // 家庭任务签到
-const doFamilyTask = async (cloudClient, logger, index) => {
-	const getRandomConcurrency = (base) => {
-		const numericBase = Number(base); // 强制转换为数字类型
-		const min = -3;
-		const max = 2;
-		const randomOffset = Math.floor(Math.random() * (max - min + 1)) + min;
-	return Math.max(1, numericBase + randomOffset); 
-	}
-		const randomTimeout = Math.random() *10000 + 30000; // 超时时间 30~40 秒随机
-   try {
-    // 获取家庭信息
-    const { familyInfoResp } = await cloudClient.getFamilyList();
-
-    if (!familyInfoResp) {
-      return logger.error(`未能获取家庭信息`);
+const doFamilyTask = async (cloudClient, acquireFamilyTotalSize,errorMessages,userNameInfo) => {
+  const { familyInfoResp } = await cloudClient.getFamilyList();
+  if (!familyInfoResp) {
+	  console.log(`未能获取家庭信息`);
+      return errorMessages.push(`${accountIndex}. 账号 ${userNameInfo} 错误: 未能获取家庭信息`);
     }
-
+  
     let familyId = null;
-	// 指定家庭签到
+    //指定家庭签到
     if (families.length > 0) {
       const targetFamily = familyInfoResp.find((familyInfo) =>
         families.includes(familyInfo.familyId)
@@ -55,172 +56,172 @@ const doFamilyTask = async (cloudClient, logger, index) => {
       if (targetFamily) {
         familyId = targetFamily.familyId;
       } else {
-        return logger.error(`没有加入到指定家庭分组`);
+		  console.log(`没有加入到指定家庭分组`);
+        return errorMessages.push(`${accountIndex}. 账号 ${userNameInfo} 错误: 没有加入指定家庭组`);
       }
     } else {
       familyId = familyInfoResp[0].familyId;
     }
 	
-	// 根据主账号判断并发次数
-	const concurrency = index == 0 ? 1 : execThreshold; 
-	// 定义任务数组
-	const tasks = [];
-	const validResults = [];
-	for (let i = 0; i < concurrency; i++) {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), randomTimeout);
-
-      tasks.push(
-        (async () => {
-          try {
-            const res = await Promise.race([
-              cloudClient.familyUserSign(familyId, { signal: controller.signal }),
-              new Promise((_, reject) => 
-                setTimeout(() => reject(new Error('Task timed out')), randomTimeout)
-              )
-            ]);
-            if (res && res.bonusSpace != null && !res.signStatus) {
-              validResults.push(res.bonusSpace);
-            }
-          } catch (error) {
-            if (error.name !== 'AbortError') {
-              logger.warn(`任务失败: ${error.message}`);
-            }
-          } finally {
-            clearTimeout(timeoutId);
-          }
-        })()
-      );
-    }
-	// 等待所有任务完成或超时
-    await Promise.all(tasks);
-
-    return logger.info(
-      `${validResults.length}/${tasks.length} 家庭获得(M): ${
-        validResults.join(" ") || "0"
+   
+    const tasks = Array.from({ length: accountIndex == 1? 1: execThreshold }, () =>
+      cloudClient.familyUserSign(familyId)
+    );
+    const result = (await Promise.allSettled(tasks)).filter(
+      ({ status, value }) => status === "fulfilled" && !value.signStatus
+    );
+	result.forEach(({ value }) => {
+		if (value.bonusSpace !== undefined && value.bonusSpace !== null) {
+			acquireFamilyTotalSize.push(value.bonusSpace);
+		}
+	});
+	return console.log(
+      `${result.length}/${tasks.length} 家庭获得(M): ${
+       result.map(({ value }) => value.bonusSpace)?.join(",") || "0"
       }`
     );
-  } catch (error) {
-    logger.error(`任务执行失败: ${error.message}`);
-    throw error;
-  }
+	
 };
 
-const run = async (userName, password, userSizeInfoMap, logger, index) => {
+const run = async (userName, password, userSizeInfoMap, acquireFamilyTotalSize,errorMessages) => {
   if (userName && password) {
     const before = Date.now();
 	const userNameInfo = mask(userName, 3, 7);
     try {
-      logger.log(`${index+1}. 账号 ${userNameInfo}`);
-      const cloudClient = new CloudClient({
+       console.log(`${accountIndex}. 账号 ${userNameInfo}`);
+      const cloudClient =  new CloudClient({
         username: userName,
         password,
         token: new FileTokenStore(`${tokenDir}/${userName}.json`),
       });
+     const beforeUserSizeInfo = await cloudClient.getUserSizeInfo();
       userSizeInfoMap.set(userName, {
         cloudClient,
-        logger,
+        userSizeInfo: beforeUserSizeInfo
       });
-	  if(index == 0){
+	   if(isMainAccount && accountIndex == 1){
 			firstUserName = userName;
-			userSizeInfoInitial = await cloudClient.getUserSizeInfo();
-			userSizeInfoLast = userSizeInfoInitial;
 		}
-	  
-	   await doUserTask(cloudClient, logger, index);
-       await doFamilyTask(cloudClient, logger, index);
-	   //重新获取主账号的空间信息		  
-		 let {cloudClient: firstCloudClient} = userSizeInfoMap.get(firstUserName);
-		 let afterUserSizeInfo = await firstCloudClient.getUserSizeInfo();
+      
+       await doUserTask(cloudClient);
+       await doFamilyTask(cloudClient,acquireFamilyTotalSize,errorMessages,userNameInfo);
 		
-		logger.log(
-			`家庭实际：+${(
-			(afterUserSizeInfo.familyCapacityInfo.totalSize -
-			userSizeInfoLast.familyCapacityInfo.totalSize) /
-			1024 /
-			1024
-			).toFixed(0)}M`);
-		userSizeInfoLast = afterUserSizeInfo;	
-	   
+		
+      
     } catch (e) {
-      if (e.response) {
-        logger.log(`请求失败: ${e.response.statusCode}, ${e.response.body}`);
-      } else {
-        logger.error(e);
-      }
+      console.log(e);
       if (e.code === "ECONNRESET" || e.code === "ETIMEDOUT") {
-        logger.error("请求超时");
+        logger.error(`${accountIndex}. 账号 ${userNameInfo}请求超时`);
         throw e;
-      }
+      }else{
+		
+		errorMessages.push( `${accountIndex}. 账号 ${userNameInfo} 错误: ${
+    typeof e === "string" ? e : e.message || "未知错误"
+  }`);
+      
+	  }
+	  
     } finally {
-      logger.log(
+     console.log(
         `耗时 ${((Date.now() - before) / 1000).toFixed(2)} 秒`
       );
-	  logger.log(' ');
-	 await delay((Math.random() * 3000) + 3000); // 随机等待3到6秒
+	  console.log(' ');
+	 await delay((Math.random() * 3000) + 1000); // 随机等待1到3秒
     }
   }
 };
 
 // 开始执行程序
 async function main() {
+	const acquireFamilyTotalSize = [];  //获得家庭总量 
+	const errorMessages = [];
+	
+	
   if (!fs.existsSync(tokenDir)) {
     fs.mkdirSync(tokenDir);
   }
   //  用于统计实际容量变化
   const userSizeInfoMap = new Map();
-  for (let index = 0; index < accounts.length; index++) {
-    const account = accounts[index];
-    const { userName, password } = account;
-    const logger = log4js.getLogger(userName);
-    logger.addContext("user", "" );
-    await run(userName, password, userSizeInfoMap, logger,index);
+  
+	const accountsdel = accounts.flatMap(line => {
+		return line
+			.split(/\s+/) // 按任意空白符分割
+			.filter(item => item.length > 0) // 防止空字符串
+});
+  for (let index = 0; index < accountsdel.length; index += 2) {
+    const [ userName, password ] = accountsdel.slice(index, index + 2);
+    await run(userName, password, userSizeInfoMap, acquireFamilyTotalSize,errorMessages);
+	accountIndex++;
   }
+  accountIndex--;
  
-			
-			//主账号详情
-  for (const [ userName,{ cloudClient,  logger }] of userSizeInfoMap) {
-	  if(userName !== firstUserName) break ;
-     const userNameInfo = mask(firstUserName, 3, 7);
+  //主账号详情
+  for (const [userName,{ cloudClient,userSizeInfo }] of userSizeInfoMap) {
+	   if(isMainAccount){
+		   const userNameInfo = mask(userName, 3, 7);
+			const afterUserSizeInfo = await cloudClient.getUserSizeInfo();
 			logger.log(`账号 ${userNameInfo}:`);
 			logger.log(`前 个人：${ (
-				(userSizeInfoInitial.cloudCapacityInfo.totalSize) /
+				(userSizeInfo.cloudCapacityInfo.totalSize) /
 				1024 /
 				1024 /
 				1024
 			).toFixed(3)}G, 家庭：${(
-				( userSizeInfoInitial.familyCapacityInfo.totalSize) /
+				( userSizeInfo.familyCapacityInfo.totalSize) /
 				1024 /
 				1024 /
 				1024
 			).toFixed(3)}G`);
 			logger.log(`后 个人：${(
-				(userSizeInfoLast.cloudCapacityInfo.totalSize) /
+				(afterUserSizeInfo.cloudCapacityInfo.totalSize) /
 				1024 /
 				1024 /
 				1024
 			).toFixed(3)}G, 家庭：${(
-				(userSizeInfoLast.familyCapacityInfo.totalSize) /
+				(afterUserSizeInfo.familyCapacityInfo.totalSize) /
 				1024 /
 				1024 /
 				1024
 			).toFixed(3)}G`);
 			logger.log(
-			`个人容量 +${(
-			(userSizeInfoLast.cloudCapacityInfo.totalSize -
-			userSizeInfoInitial.cloudCapacityInfo.totalSize) /
+			`个人 +${(
+			(afterUserSizeInfo.cloudCapacityInfo.totalSize -
+			userSizeInfo.cloudCapacityInfo.totalSize) /
 			1024 /
 			1024
-			).toFixed(0)}M  家庭容量 +${(
-			(userSizeInfoLast.familyCapacityInfo.totalSize -
-			userSizeInfoInitial.familyCapacityInfo.totalSize) /
+			).toFixed(0)}M  家庭 +${(
+			(afterUserSizeInfo.familyCapacityInfo.totalSize -
+			userSizeInfo.familyCapacityInfo.totalSize) /
 			1024 /
 			1024
-			).toFixed(0)}M     `
+			).toFixed(0)}M  签到 ${acquireFamilyTotalSize.length}/${accountIndex} 次`
 			);
 			logger.log(' ');
+			break;
+	 }else{
+		 const sumFamilyTotalSize = acquireFamilyTotalSize.reduce((accumulator, currentValue) => {
+				return accumulator + currentValue;
+			}, 0);
+		 logger.log(
+		`家庭容量 +${
+		sumFamilyTotalSize}M  签到 ${acquireFamilyTotalSize.length}/${accountIndex}次   `
+		);
+		 logger.log(
+		`家庭获得 ${
+		acquireFamilyTotalSize?.length > 0? acquireFamilyTotalSize.join(" + "): "0"} = ${sumFamilyTotalSize}M     `
+		);
+		logger.log(' ');
+		break;
+	 }
   }
-			
+  
+  // 错误信息输出
+  if (errorMessages.length > 0) {
+    originalLog(' ');
+    originalLog('错误信息:');
+    errorMessages.forEach(msg => originalLog(msg));
+  }
+  
 }
 
 (async () => {
@@ -232,13 +233,13 @@ async function main() {
     const logs = catLogs();
     const events = recording.replay();
     const content = events.map((e) => `${e.data.join("")}`).join("  \n");
-	
-	const userNameInfo = mask(firstUserName, 3, 7);
-	const target = "家庭容量";
+
+	const userNameInfo = isMainAccount? mask(firstUserName, 3, 7).slice(9, 12):" ";
+	const target = ["家庭容量"].includes(logs) ? "家庭容量": "M  家庭";
 	const targetIndex = logs.indexOf(target);
 	const startIndex = targetIndex + target.length;
-	const contentDel = logs.substring(startIndex, startIndex + 7);
-    push(`${userNameInfo.slice(7, 12)}天翼家庭容量${contentDel}`, logs + content);
+	const contentDel = logs.substring(startIndex, startIndex + 15);
+    push(`${userNameInfo}家庭${contentDel}`, logs + content);
     recording.erase();
     cleanLogs();
   }
