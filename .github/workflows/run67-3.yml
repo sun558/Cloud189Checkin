@@ -1,13 +1,13 @@
 name: Cloud check67-3 in action
 on:
-  push:
-    branches:
-      - main
-  watch:
-    types: started
+ ## push:
+ ##   branches:
+ ##     - main
+##  watch:
+##    types: started
   workflow_dispatch:
-  schedule:
-    - cron: 35 23 * * *
+##  schedule:
+##    - cron: 35 23 * * *
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
