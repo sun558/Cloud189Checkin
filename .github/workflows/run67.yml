@@ -11,7 +11,7 @@ on:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    environment: user67
+    environment: usertest
     steps:
      
       - name: 🔌 Check out code
