@@ -3,8 +3,8 @@ on:
   push:
     branches:
       - main
-  watch:
-     types: started
+ ## watch:
+ ##    types: started
  ## workflow_dispatch:
  ## schedule:
  ##   - cron: 35 21 * * *
