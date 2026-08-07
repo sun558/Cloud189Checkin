@@ -34,8 +34,8 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: .token
-          key: ${{ runner.os }}-cache-token-${{ github.environment }}
-          restore-keys: ${{ runner.os }}-cache-token-${{ github.environment }}-
+          key: ${{ runner.os }}-cache-token-user166
+          restore-keys: ${{ runner.os }}-cache-token-user166-
 
       - name: 🔧 Init secrets
         uses: shine1594/secrets-to-env-action@master
@@ -59,8 +59,8 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: .token
-          key: ${{ runner.os }}-cache-token-${{ github.environment }}-${{ hashFiles('.token/*.json') }}
-
+          key: ${{ runner.os }}-cache-token-user166-${{ hashFiles('.token/*.json') }}
+          
       - name: 🚗 Keep Running
         if: github.event_name == 'schedule'
         run: |
