@@ -13,8 +13,6 @@ jobs:
     runs-on: ubuntu-latest
     environment: user166
     steps:
-    
-
       - name: 🔌 Check out code
         uses: actions/checkout@main
 
@@ -28,15 +26,15 @@ jobs:
         if: vars.debug == '1'
         run: |
           echo "CLOUD189_VERBOSE=1" >> $GITHUB_ENV
-      
+
       - name: 📹 Restore cached Cookie
-       id: cache-cookie-restore
-       uses: actions/cache/restore@v4
-       with:
-         path: .token
-         key: ${{ runner.os }}-cache-token-${{ github.environment }}
-         restore-keys: ${{ runner.os }}-cache-token-${{ github.environment }}-
-    
+        id: cache-cookie-restore
+        uses: actions/cache/restore@v4
+        with:
+          path: .token
+          key: ${{ runner.os }}-cache-token-${{ github.environment }}
+          restore-keys: ${{ runner.os }}-cache-token-${{ github.environment }}-
+
       - name: 🔧 Init secrets
         uses: shine1594/secrets-to-env-action@master
         with:
@@ -54,7 +52,7 @@ jobs:
           timeout_minutes: 5
           max_attempts: 3
           command: npm start
-      
+
       - name: 📹 Save cached Cookie
         uses: actions/cache/save@v4
         with:
