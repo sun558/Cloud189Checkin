@@ -13,8 +13,6 @@ jobs:
     runs-on: ubuntu-latest
     environment: user10
     steps:
-    
-
       - name: 🔌 Check out code
         uses: actions/checkout@main
 
@@ -34,8 +32,8 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: .token
-          key: ${{ runner.os }}-cache-token-user10
-          restore-keys: ${{ runner.os }}-cache-token-user10-
+          key: cloud189-token-user10-${{ hashFiles('.token/*.json') }}
+          restore-keys: cloud189-token-user10-
 
       - name: 🔧 Init secrets
         uses: shine1594/secrets-to-env-action@master
@@ -51,15 +49,22 @@ jobs:
       - name: 🚀 Run
         uses: nick-fields/retry@master
         with:
-          timeout_minutes: 5
+          timeout_minutes: 30
           max_attempts: 3
           command: npm start
-      
+
+      - name: 🔑 Compute token hash
+        if: always()
+        run: |
+          NEW_HASH=$(find .token -name '*.json' -exec sha256sum {} \; 2>/dev/null | sha256sum | cut -d' ' -f1)
+          echo "TOKEN_HASH=${NEW_HASH}" >> $GITHUB_ENV
+
       - name: 📹 Save cached Cookie
+        if: always() && env.TOKEN_HASH != ''
         uses: actions/cache/save@v4
         with:
           path: .token
-          key: ${{ runner.os }}-cache-token-user10-${{ hashFiles('.token/*.json') }}
+          key: cloud189-token-user10-${{ env.TOKEN_HASH }}
 
       - name: 🚗 Keep Running
         if: github.event_name == 'schedule'
@@ -78,3 +83,10 @@ jobs:
           repository: ${{ github.repository }}
           retain_days: 0
           keep_minimum_runs: 50
+
+      - name: 🧹 Clean old caches (keep latest 5)
+        if: always()
+        uses: UjjwalBudha/actions-cache-manager@main
+        with:
+          keep-recent: '5'
+          key: 'cloud189-token-user10-'
