@@ -59,24 +59,76 @@ const doUserTask = async (cloudClient) => {
 };
 
 /* =========================================================================
- * 家庭签到（重写：AppKey 签名 + Web 域）
+ * 家庭签到（2026-11-26 实测修正版）
  *
- * 为什么原来的失败：
- *   cloudClient.familyUserSign(familyId) 内部打的是
- *     https://api.cloud.189.cn/open/family/manage/exeFamilyUserSign.action
- *   走 AccessToken 签名 → 返回 InvalidSignature: accessTokenSignature is not match
- *   （cloud189-sdk 里这个方法自己就标着 @deprecated 已无效）
+ * 真机实测结论（用真实账号跑通，容量 +61MB）：
+ *   正确地址是  https://cloud.189.cn/api/open/family/manage/exeFamilyUserSign.action
+ *                            ^^^^ 交接文档漏了这个 /api
  *
- * 正确姿势：
- *   GET https://cloud.189.cn/open/family/manage/exeFamilyUserSign.action
- *   AppKey 签名（appkey=600100422），签名串 = 排序后的 familyId=..&sessionKey=..&Timestamp=..&AppKey=..
- *   即：sessionKey 必须放进 query 一起参与签名（不是只放 URL 不签名，也不是放 header）
+ * 三个坑，逐个踩过：
+ *   ① 交接文档写的是 cloud.189.cn/open/...（没有 /api）
+ *      → 服务端返回 InvalidArgument: familyStatusCheck() - sessionKey=null
+ *      看着像"sessionKey 没传"，其实是路由没匹配上，控制器拿不到参数。
+ *   ② 换参数名（SessionKey/sessionkey）、改 POST 表单、加 Cookie 都没用，
+ *      症状全是 sessionKey=null —— 只要地址少 /api 就一定是这个错。
+ *   ③ 返回体是 XML，不是 JSON：
+ *      <familySignInfo><signStatus>0</signStatus>...<bonusSpace>61</bonusSpace></familySignInfo>
+ *      原来用 res.json() 解析会直接抛错，日志里只剩"家庭签到失败"。
  *
- * SDK 的 beforeRequest 钩子已经会替我们做 AppKey 签名：
- *   命中 cloud.189.cn 且路径含 /open → signatureAppKey(options, "600100422")
- * 但它是「先算签名、后补 sessionKey」，所以必须自己先把 sessionKey 塞进 query。
+ * 签名仍然是 AppKey 版（appkey=600100422）：
+ *   签名串 = 排序后的 familyId=..&sessionKey=..&Timestamp=..&AppKey=..
+ *   sessionKey 必须在 query 里、且参与签名。
+ *
+ * SDK 的 beforeRequest 钩子会自动签名（命中 cloud.189.cn 且路径含 /open），
+ * 但它「先签名、后补 sessionKey」，所以必须自己先把 sessionKey 塞进 query。
  * ========================================================================= */
-const FAMILY_SIGN_URL = "https://cloud.189.cn/open/family/manage/exeFamilyUserSign.action";
+const FAMILY_SIGN_URL =
+  "https://cloud.189.cn/api/open/family/manage/exeFamilyUserSign.action";
+
+// 极简 XML 取值：<tag>value</tag>，不引入额外依赖
+const xmlPick = (text, tag) => {
+  const m = text.match(new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`));
+  return m ? m[1].trim() : null;
+};
+
+/**
+ * 这个接口的返回格式由 Accept 头决定（内容协商）：
+ *   - 带 Accept: application/json（SDK 默认）→ {"bonusSpace":61,"signStatus":1,...}
+ *   - 不带 / Accept: * / *                → <familySignInfo><signStatus>1</signStatus>...
+ * 所以两种都要能解析，否则换个调用方式就"解析失败"。
+ */
+const parseSignBody = (text) => {
+  const t = String(text || "").trim();
+
+  if (t.startsWith("{")) {
+    try {
+      const j = JSON.parse(t);
+      return {
+        errorCode: j.errorCode || null,
+        errorMsg: j.errorMsg || "",
+        signStatus: j.signStatus ?? null,
+        bonusSpace: j.bonusSpace ?? null,
+        signFamilyId: j.signFamilyId ?? null,
+        signTime: j.signTime ?? null,
+        __format: "json",
+        __raw: t,
+      };
+    } catch (e) {
+      /* 落到下面按 XML 处理 */
+    }
+  }
+
+  return {
+    errorCode: xmlPick(t, "code"),
+    errorMsg: xmlPick(t, "message") || "",
+    signStatus: xmlPick(t, "signStatus"),
+    bonusSpace: xmlPick(t, "bonusSpace"),
+    signFamilyId: xmlPick(t, "signFamilyId"),
+    signTime: xmlPick(t, "signTime"),
+    __format: "xml",
+    __raw: t,
+  };
+};
 
 const familyUserSign = async (cloudClient, familyId) => {
   const url = new URL(FAMILY_SIGN_URL);
@@ -87,18 +139,9 @@ const familyUserSign = async (cloudClient, familyId) => {
     url.searchParams.set("familyId", String(familyId));
     url.searchParams.set("sessionKey", sessionKey);
 
-    // throwHttpErrors:false —— 自己解析 errorCode，避免非会话类错误被 got 包装后看不清
+    // throwHttpErrors:false —— 自己解析错误码，避免非会话类错误被 got 包装后看不清
     const res = await cloudClient.request.get(url, { throwHttpErrors: false });
-    const text = res.body.toString();
-    let json;
-    try {
-      json = JSON.parse(text);
-    } catch (e) {
-      throw new Error(
-        `家庭签到返回非 JSON（HTTP ${res.statusCode}）: ${text.slice(0, 200)}`
-      );
-    }
-    return json;
+    return parseSignBody(res.body.toString());
   };
 
   let json = await send();
@@ -120,7 +163,7 @@ const familyUserSign = async (cloudClient, familyId) => {
     throw err;
   }
 
-  // signStatus: "0"=本次成功；"1"=今天已签（不是错误）
+  // 实测语义：signStatus="0" = 本次签到成功；"1" = 今天已经签过
   const signStatus = String(json.signStatus ?? "");
   const signed = signStatus === "0";
   const signedFamilyId = String(json.signFamilyId ?? "");
@@ -129,7 +172,7 @@ const familyUserSign = async (cloudClient, familyId) => {
     raw: json,
     signed,
     alreadySigned: signStatus === "1",
-    // 已签过时 bonusSpace 读到的是旧值，必须置 0
+    // 已签过时 bonusSpace 读到的是历史值，必须置 0
     bonusSpace: signed ? Number(json.bonusSpace) || 0 : 0,
     signedFamilyId,
     // 189 实际记账的家庭不一定是你传的，必须透出
@@ -206,18 +249,20 @@ const doFamilyTask = async (cloudClient) => {
     if (value.signed) {
       gotCount++;
       gotSpace += value.bonusSpace;
-    } else if (value.alreadySigned) {
-      logger.log(`家庭 ${familyId} 今天已签过，不再重复计入`);
     }
+    // 已签（signStatus=1）不打印提示：直接体现在「0/1 家庭获得(M): 0」那一行
   });
 
   // 全部失败（比如签名错、接口变更）必须抛出去，否则日志会显示成
-  // 「0/1 家庭容量：0M」，和「今天已签」长得一模一样，等于假绿
+  // 「0/1 家庭获得(M): 0」，和「今天已签」长得一模一样，等于假绿
   if (errors.length === tasks.length) {
     throw errors[0];
   }
 
-  // 汇总行交给 run() 打印：那里才拿得到「家庭总容量」，才能拼成 xM/xxxxG
+  // 和「个人获得」对称的一行：签到成功 = 本次实发空间；今天已签 = 0
+  logger.log(`${gotCount}/${tasks.length} 家庭获得(M): ${gotSpace || 0}`);
+
+  // 容量行交给 run() 打印：那里才拿得到「家庭总容量」，才能拼成 xM/xxxxG
   return { signedCount: gotCount, total: tasks.length, gotSpace };
 };
 
@@ -250,18 +295,20 @@ const run = async (userName, password) => {
       const familyBefore = beforeUserSizeInfo.familyCapacityInfo?.totalSize;
       const familyAfter = afterUserSizeInfo.familyCapacityInfo?.totalSize;
 
-      // 家庭行：前面是本次签到「实际拿到的空间」（不是容量差值），后面是家庭总容量
-      //   签到成功 → 1/1 家庭容量：61M/16.00G
-      //   今天已签 → 0/1 家庭容量：0M/16.00G
-      // 家庭签到未开启 / 没有家庭时，退回原来的「容量差」写法
+      // 容量行：个人、家庭各占一行，不再拼成一行
+      //   个人容量：个人总容量的前后差值 / 当前总量
+      //   家庭容量：本次签到实发（bonusSpace）/ 家庭总容量；今天已签则为 0
+      const personalLog = `个人容量:️ ⬆️ ${mb(
+        (personalAfter || 0) - (personalBefore || 0)
+      )}M/${gb(personalAfter)}G`;
       const familyLog = familyResult
-        ? `${familyResult.signedCount}/${familyResult.total} 家庭容量：${familyResult.gotSpace}M/${gb(familyAfter)}G`
-        : `家庭容量: ⬆️ ️${mb((familyAfter || 0) - (familyBefore || 0))}M/${gb(familyAfter)}G`;
+        ? `家庭容量：⬆️ ${familyResult.gotSpace}M/${gb(familyAfter)}G`
+        : `家庭容量: ⬆️ ${mb(
+            (familyAfter || 0) - (familyBefore || 0)
+          )}M/${gb(familyAfter)}G`;
 
-      logger.log(
-        `个人容量:️ ⬆️ ${mb((personalAfter || 0) - (personalBefore || 0))}M/${gb(personalAfter)}G`,
-        familyLog
-      );
+      logger.log(personalLog);
+      logger.log(familyLog);
     } catch (e) {
       logger.log(e);
       if (e.code === "ECONNRESET" || e.code === "ETIMEDOUT") {
